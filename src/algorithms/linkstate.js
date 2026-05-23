@@ -1,145 +1,60 @@
 function snapshotLSDB(lsdb) {
   const copy = {};
-  for (const node in lsdb) {
-    copy[node] = { ...lsdb[node] };
-  }
+  for (const node in lsdb) copy[node] = { ...lsdb[node] };
   return copy;
 }
 
-function snapshotDist(dist) {
-  return { ...dist };
-}
-
-function snapshotPrev(prev) {
-  return { ...prev };
-}
-
-function snapshotTables(tables) {
+function snapshotRoutingTables(routingTables) {
   const copy = {};
-  for (const node in tables) {
+  for (const node in routingTables) {
     copy[node] = {};
-    for (const dest in tables[node]) {
-      copy[node][dest] = { ...tables[node][dest] };
+    for (const dest in routingTables[node]) {
+      copy[node][dest] = { ...routingTables[node][dest] };
     }
   }
   return copy;
 }
 
-function reconstructPath(prev, src, dest) {
-  if (prev[dest] === null && dest !== src) return [];
-  const path = [];
-  let current = dest;
-  while (current !== null && current !== undefined) {
-    path.unshift(current);
-    if (current === src) return path;
-    current = prev[current];
-  }
-  return [];
-}
+function snapshotDist(dist)   { return { ...dist }; }
+function snapshotPrev(prev)   { return { ...prev }; }
+function snapshotSettled(set) { return [...set];     }
 
-function buildTable(nodes, src, dist, prev) {
+function buildNodeTable(nodes, src, dist, prev) {
   const table = {};
   for (const dest of nodes) {
     if (dest === src) {
-      table[dest] = { cost: 0, nextHop: null };
+      table[dest] = { cost: 0, next: null };
       continue;
     }
     const cost = dist[dest];
     if (cost === Infinity) {
-      table[dest] = { cost: Infinity, nextHop: null };
+      table[dest] = { cost: Infinity, next: null };
       continue;
     }
-    
-    const path = reconstructPath(prev, src, dest);
-    const nextHop = path.length >= 2 ? path[1] : null;
-    table[dest] = { cost, nextHop };
+    let cursor = dest;
+    while (prev[cursor] !== src && prev[cursor] !== null) {
+      cursor = prev[cursor];
+    }
+    table[dest] = { cost, next: prev[cursor] === src ? cursor : null };
   }
   return table;
 }
 
-function runDijkstra(source, nodes, lsdb, tables, steps) {
-  const dist = {};
-  const prev = {};
-  const settled = new Set();
-
-  for (const n of nodes) {
-    dist[n] = Infinity;
-    prev[n] = null;
-  }
-  dist[source] = 0;
-
-  steps.push({
-    type:    "dijkstra_start",
-    node:    source,
-    dist:    snapshotDist(dist),
-    prev:    snapshotPrev(prev),
-    settled: [...settled],
-    phase:   "dijkstra",
-  });
-
-  while (settled.size < nodes.length) {
-    
-    let u = null;
-    for (const n of nodes) {
-      if (!settled.has(n)) {
-        if (u === null || dist[n] < dist[u]) u = n;
-      }
-    }
-
-    if (dist[u] === Infinity) break;
-
-    settled.add(u);
-
-    steps.push({
-      type:    "dijkstra_visit",
-      node:    source,
-      visiting: u,
-      dist:    snapshotDist(dist),
-      prev:    snapshotPrev(prev),
-      settled: [...settled],
-      phase:   "dijkstra",
-    });
-
-    const neighbours = lsdb[u] ?? {};
-    for (const v of nodes) {
-      if (settled.has(v)) continue;
-      const linkCost = neighbours[v];
-      if (linkCost === undefined) continue; 
-
-      const candidate = dist[u] + linkCost;
-      if (candidate < dist[v]) {
-        const oldCost = dist[v];
-        dist[v] = candidate;
-        prev[v] = u;
-
-        steps.push({
-          type:      "dijkstra_relax",
-          node:      source,
-          visiting:  u,
-          neighbour: v,
-          oldCost,
-          newCost:   candidate,
-          dist:      snapshotDist(dist),
-          prev:      snapshotPrev(prev),
-          settled:   [...settled],
-          phase:     "dijkstra",
-        });
-      }
-    }
-  }
-
-  const table = buildTable(nodes, source, dist, prev);
-  tables[source] = table;
-
-  steps.push({
-    type:    "dijkstra_done",
-    node:    source,
-    table:   { ...table },
-    dist:    snapshotDist(dist),
-    prev:    snapshotPrev(prev),
-    settled: [...settled],
-    phase:   "dijkstra",
-  });
+function makeStep(overrides, lsdb, routingTables) {
+  return {
+    type:          null,
+    phase:         null,
+    node:          null,
+    neighbour:     null,
+    lsa:           null,
+    duplicate:     null,
+    dist:          null,
+    prev:          null,
+    settled:       null,
+    lsdb:          snapshotLSDB(lsdb),
+    routingTables: snapshotRoutingTables(routingTables),
+    ...overrides,
+  };
 }
 
 export function linkState(graph) {
@@ -166,32 +81,31 @@ export function linkState(graph) {
   }
 
   const steps = [];
+  const routingTables = {};
 
   const lsdb = {};
-  for (const u of nodes) {
-    lsdb[u] = {};
-  }
-  const seen = new Set();
+  for (const u of nodes) lsdb[u] = {};
+  const seen = {};
+  for (const u of nodes) seen[u] = new Set();
 
-  const queue = [];
+  const queue = []; 
 
   for (const u of nodes) {
     const links = {};
-    for (const { to: v, weight: w } of graph[u]) {
-      links[v] = w;
-    }
+    for (const { to: v, weight: w } of graph[u]) links[v] = w;
+
     const lsa = { origin: u, links };
 
     lsdb[u] = { ...links };
-    seen.add(u);
+    seen[u].add(u);
 
-    steps.push({
-      type:  "lsa_created",
-      node:  u,
-      lsa:   { ...lsa, links: { ...lsa.links } },
-      lsdb:  snapshotLSDB(lsdb),
-      phase: "flood",
-    });
+    steps.push(makeStep({
+      type:      "lsa_created",
+      phase:     "flood",
+      node:      u,
+      lsa:       { origin: u, links: { ...links } },
+      duplicate: false,
+    }, lsdb, routingTables));
 
     for (const { to: neighbour } of graph[u]) {
       queue.push({ lsa, forwarder: u, receiver: neighbour });
@@ -200,38 +114,34 @@ export function linkState(graph) {
 
   while (queue.length > 0) {
     const { lsa, forwarder, receiver } = queue.shift();
-    const origin = lsa.origin;
-    const duplicate = lsdb[receiver][origin] !== undefined ||
-                      (origin === receiver);
+    const { origin } = lsa;
+    const duplicate = seen[receiver].has(origin);
 
-    steps.push({
+    steps.push(makeStep({
       type:      "lsa_received",
-      sender:    forwarder,
-      receiver,
-      lsa:       { ...lsa, links: { ...lsa.links } },
-      duplicate,
-      lsdb:      snapshotLSDB(lsdb),
       phase:     "flood",
-    });
+      node:      receiver,
+      neighbour: forwarder,
+      lsa:       { origin, links: { ...lsa.links } },
+      duplicate,
+    }, lsdb, routingTables));
 
     if (duplicate) continue;
 
-    lsdb[receiver][origin] = undefined; 
-    
+    seen[receiver].add(origin);
+    if (!lsdb[origin]) lsdb[origin] = {};
     for (const [dest, cost] of Object.entries(lsa.links)) {
-      if (lsdb[origin] === undefined) lsdb[origin] = {};
       lsdb[origin][dest] = cost;
     }
 
-    lsdb[receiver] = lsdb[receiver] ?? {};
-
-    steps.push({
+    steps.push(makeStep({
       type:      "lsa_forwarded",
-      forwarder: receiver,
-      lsa:       { ...lsa, links: { ...lsa.links } },
-      lsdb:      snapshotLSDB(lsdb),
       phase:     "flood",
-    });
+      node:      receiver,
+      neighbour: forwarder,
+      lsa:       { origin, links: { ...lsa.links } },
+      duplicate: false,
+    }, lsdb, routingTables));
 
     for (const { to: next } of graph[receiver]) {
       if (next === forwarder) continue;
@@ -241,64 +151,133 @@ export function linkState(graph) {
 
   const floodSteps = steps.length;
 
-  steps.push({
+  steps.push(makeStep({
     type:  "flood_done",
-    lsdb:  snapshotLSDB(lsdb),
     phase: "flood",
-  });
+  }, lsdb, routingTables));
 
-  const tables = {};
+  for (const source of nodes) {
+    const dist    = {};
+    const prev    = {};
+    const settled = new Set();
 
-  for (const node of nodes) {
-    runDijkstra(node, nodes, lsdb, tables, steps);
+    for (const n of nodes) {
+      dist[n] = Infinity;
+      prev[n] = null;
+    }
+    dist[source] = 0;
+
+    steps.push(makeStep({
+      type:    "dijkstra_start",
+      phase:   "dijkstra",
+      node:    source,
+      dist:    snapshotDist(dist),
+      prev:    snapshotPrev(prev),
+      settled: snapshotSettled(settled),
+    }, lsdb, routingTables));
+
+    while (settled.size < nodes.length) {
+      let u = null;
+      for (const n of nodes) {
+        if (!settled.has(n) && (u === null || dist[n] < dist[u])) u = n;
+      }
+      if (dist[u] === Infinity) break; 
+
+      settled.add(u);
+
+      steps.push(makeStep({
+        type:     "dijkstra_visit",
+        phase:    "dijkstra",
+        node:     source,
+        neighbour: u,
+        dist:     snapshotDist(dist),
+        prev:     snapshotPrev(prev),
+        settled:  snapshotSettled(settled),
+      }, lsdb, routingTables));
+
+      for (const v of nodes) {
+        if (settled.has(v)) continue;
+        const linkCost = lsdb[u]?.[v];
+        if (linkCost === undefined) continue;
+
+        const candidate = dist[u] + linkCost;
+        if (candidate < dist[v]) {
+          const oldCost = dist[v];
+          dist[v] = candidate;
+          prev[v] = u;
+
+          steps.push(makeStep({
+            type:      "dijkstra_relax",
+            phase:     "dijkstra",
+            node:      source,
+            neighbour: v,
+            dist:      snapshotDist(dist),
+            prev:      snapshotPrev(prev),
+            settled:   snapshotSettled(settled),
+            oldCost,
+            newCost:   candidate,
+          }, lsdb, routingTables));
+        }
+      }
+    }
+
+    routingTables[source] = buildNodeTable(nodes, source, dist, prev);
+
+    steps.push(makeStep({
+      type:    "dijkstra_done",
+      phase:   "dijkstra",
+      node:    source,
+      dist:    snapshotDist(dist),
+      prev:    snapshotPrev(prev),
+      settled: snapshotSettled(settled),
+    }, lsdb, routingTables));
   }
 
   const dijkstraSteps = steps.length - floodSteps - 1; 
 
-  steps.push({
-    type:   "done",
-    lsdb:   snapshotLSDB(lsdb),
-    tables: snapshotTables(tables),
-  });
+  steps.push(makeStep({
+    type:  "done",
+    phase: "done",
+  }, lsdb, routingTables));
 
   return {
-    lsdb:   snapshotLSDB(lsdb),
-    tables: snapshotTables(tables),
+    lsdb:          snapshotLSDB(lsdb),
+    routingTables: snapshotRoutingTables(routingTables),
     steps,
     meta: {
-      totalSteps:      steps.length,
-      lsaCount:        nodes.length,
+      totalSteps:    steps.length,
+      lsaCount:      nodes.length,
       floodSteps,
       dijkstraSteps,
-      hasNegativeCycle: false,
     },
   };
 }
 
-export function getPath(tables, src, dest) {
-  if (!(src in tables)) {
+export function getPath(routingTables, src, dest) {
+  if (!(src in routingTables)) {
     throw new Error(`getPath: source node "${src}" not found in tables`);
   }
-  if (!(dest in tables)) {
+  if (!(dest in routingTables[src])) {
     throw new Error(`getPath: destination node "${dest}" not found in tables`);
   }
 
-  const cost = tables[src][dest].cost;
+  const cost      = routingTables[src][dest].cost;
   const reachable = cost !== Infinity;
-  const path = [];
 
-  if (reachable) {
-    let current = src;
-    const visited = new Set([src]);
-    path.push(src);
-    while (current !== dest) {
-      const nextHop = tables[current][dest].nextHop;
-      if (nextHop === null || visited.has(nextHop)) { path.length = 0; break; }
-      visited.add(nextHop);
-      path.push(nextHop);
-      current = nextHop;
-    }
+  if (!reachable) return { path: [], cost, reachable };
+  if (src === dest) return { path: [src], cost: 0, reachable: true };
+
+  const path    = [src];
+  const visited = new Set([src]);
+  let   current = src;
+
+  while (current !== dest) {
+    const next = routingTables[current][dest].next;
+    if (next === null || visited.has(next)) return { path: [], cost, reachable: false };
+    visited.add(next);
+    path.push(next);
+    current = next;
   }
-  
+
   return { path, cost, reachable };
 }
