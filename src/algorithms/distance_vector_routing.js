@@ -47,14 +47,6 @@ export function distanceVector(graph, options = {}) {
         return tables;
     }
 
-    const getLinkCost = (from, to) => {
-        const edge = (graph[from] || []).find(
-            (e) => e.to === to
-        );
-
-        return edge ? edge.weight : Infinity;   
-    }
-
     const steps = [];
     const distVectors = {};
     const nextHops = {};
@@ -167,7 +159,7 @@ export function distanceVector(graph, options = {}) {
                             destination: dest,
                             oldCost: currentCost,
                             newCost: candidateCost, 
-                            nextHops: router
+                            nextHop: router
                         });
 
                         totalUpdates++;
