@@ -7,7 +7,7 @@ import { Shield, Network } from "lucide-react";
 import bwNetworkGraphic from "./bw_network_graphic.png";
 
 export default function Auth() {
-  const { loginWithGoogle, isFirebase } = useAuth();
+  const { loginWithGoogle, isFirebase, loginAsGuest } = useAuth();
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
@@ -26,6 +26,22 @@ export default function Auth() {
       setLoading(false);
     }
   };
+
+  const handleGuestSignIn = async () => {
+    setError("");
+    setSuccess("");
+    setLoading(true);
+    try {
+      await loginAsGuest();
+      setSuccess("Accessing simulator in Guest Mode...");
+    } catch (err) {
+      console.error(err);
+      setError("Guest access failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   return (
     <div className="relative flex items-center justify-center min-h-screen w-full bg-black text-white px-4 select-none">
@@ -111,26 +127,37 @@ export default function Auth() {
               </div>
             )}
 
-            <Button
-              type="button"
-              onClick={handleGoogleSignIn}
-              disabled={loading}
-              className="w-full border border-zinc-850 bg-black/50 text-zinc-300 hover:bg-white hover:text-black font-semibold py-2.5 rounded-md transition-all flex items-center justify-center gap-2.5 cursor-pointer outline-none active:scale-[0.99] text-xs mt-2 backdrop-blur-sm"
-            >
-              {loading ? (
-                <span className="w-4 h-4 border-2 border-zinc-400/30 border-t-zinc-400 rounded-full animate-spin"></span>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" viewBox="0 0 24 24">
-                    <path
-                      fill="currentColor"
-                      d="M12.24 10.285V14.4h6.887c-.275 1.565-1.88 4.604-6.887 4.604-4.33 0-7.859-3.579-7.859-8s3.529-8 7.859-8c2.46 0 4.105 1.025 5.047 1.926l3.227-3.104C18.232 1.814 15.485 1 12.24 1 6.033 1 1 6.033 1 12.24s5.033 11.24 11.24 11.24c6.478 0 10.793-4.537 10.793-10.976 0-.743-.08-1.309-.176-1.714H12.24z"
-                    />
-                  </svg>
-                  Continue with Google
-                </>
-              )}
-            </Button>
+             <div className="flex flex-col gap-2 mt-2">
+              <Button
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={loading || !isFirebase}
+                className={`w-full border border-zinc-850 bg-black/50 text-zinc-300 hover:bg-white hover:text-black font-semibold py-2.5 rounded-md transition-all flex items-center justify-center gap-2.5 cursor-pointer outline-none active:scale-[0.99] text-xs backdrop-blur-sm ${!isFirebase ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {loading ? (
+                  <span className="w-4 h-4 border-2 border-zinc-400/30 border-t-zinc-400 rounded-full animate-spin"></span>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <path
+                        fill="currentColor"
+                        d="M12.24 10.285V14.4h6.887c-.275 1.565-1.88 4.604-6.887 4.604-4.33 0-7.859-3.579-7.859-8s3.529-8 7.859-8c2.46 0 4.105 1.025 5.047 1.926l3.227-3.104C18.232 1.814 15.485 1 12.24 1 6.033 1 1 6.033 1 12.24s5.033 11.24 11.24 11.24c6.478 0 10.793-4.537 10.793-10.976 0-.743-.08-1.309-.176-1.714H12.24z"
+                      />
+                    </svg>
+                    Continue with Google
+                  </>
+                )}
+              </Button>
+
+              <Button
+                type="button"
+                onClick={handleGuestSignIn}
+                disabled={loading}
+                className="w-full border border-cyan-800 bg-cyan-950/20 text-cyan-400 hover:bg-cyan-400 hover:text-black font-semibold py-2.5 rounded-md transition-all flex items-center justify-center gap-2.5 cursor-pointer outline-none active:scale-[0.99] text-xs backdrop-blur-sm"
+              >
+                Enter as Guest (Harsh Patel)
+              </Button>
+            </div>
           </CardContent>
           <CardFooter className="relative z-10 flex flex-col border-t border-zinc-900 pt-4 pb-4 bg-black/40 backdrop-blur-[2px]">
             <span className="text-[9px] text-zinc-600 uppercase tracking-widest text-center font-bold">

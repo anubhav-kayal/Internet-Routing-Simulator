@@ -72,6 +72,15 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const loginAsGuest = () => {
+    setCurrentUser({
+      uid: "guest",
+      email: "harsh.patel@ieee.org",
+      displayName: "Harsh Patel"
+    });
+    return Promise.resolve();
+  };
+
   const value = {
     currentUser,
     isFirebase: isFirebaseConfigured,
@@ -79,6 +88,7 @@ export function AuthProvider({ children }) {
     login,
     loginWithGoogle,
     logout,
+    loginAsGuest,
     loading
   };
 
@@ -88,3 +98,4 @@ export function AuthProvider({ children }) {
     </AuthContext.Provider>
   );
 }
+
