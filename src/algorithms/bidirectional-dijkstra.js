@@ -49,3 +49,49 @@ class MinHeap {
     }
   }
 }
+
+function buildReverseGraph(graph) {
+  const reversed = {};
+  for (const node of Object.keys(graph)) {
+    if (!(node in reversed)) reversed[node] = [];
+    for (const { to, weight } of graph[node]) {
+      if (!(to in reversed)) reversed[to] = [];
+      reversed[to].push({ to: node, weight });
+    }
+  }
+  return reversed;
+}
+
+function reconstructPath(prevF, prevB, source, target, meetNode) {
+  const forward = [];
+  let cur = meetNode;
+  while (cur !== null && cur !== undefined) {
+    forward.unshift(cur);
+    if (cur === source) break;
+    cur = prevF[cur];
+  }
+  if (forward[0] !== source) return [];
+  
+  const backward = [];
+  cur = meetNode;
+  while (cur !== null && cur !== undefined) {
+    if (cur !== meetNode) backward.push(cur);
+    if (cur === target) break;
+    cur = prevB[cur];
+  }
+  if (backward[backward.length - 1] !== target) return [];
+
+  return [...forward, ...backward];
+}
+
+function snapDist(dist) {
+  return { ...dist };
+}
+
+function snapPrev(prev) {
+  return { ...prev };
+}
+
+function snapVisited(visitedSet) {
+  return Array.from(visitedSet);
+}
