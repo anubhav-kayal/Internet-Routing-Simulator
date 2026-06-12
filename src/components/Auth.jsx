@@ -7,10 +7,11 @@ import { Shield, Network } from "lucide-react";
 import bwNetworkGraphic from "./bw_network_graphic.png";
 
 export default function Auth() {
-  const { loginWithGoogle, isFirebase, loginAsGuest } = useAuth();
+  const { loginWithGoogle, loginAsGuest, isFirebase } = useAuth();
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [guestName, setGuestName] = useState("");
 
   const handleGoogleSignIn = async () => {
     setError("");
@@ -27,21 +28,25 @@ export default function Auth() {
     }
   };
 
-  const handleGuestSignIn = async () => {
+  const handleGuestSignIn = async (e) => {
+    e.preventDefault();
+    if (!guestName.trim()) {
+      setError("Please enter a name to continue.");
+      return;
+    }
     setError("");
     setSuccess("");
     setLoading(true);
     try {
-      await loginAsGuest();
-      setSuccess("Accessing simulator in Guest Mode...");
+      await loginAsGuest(guestName.trim());
+      setSuccess("Guest session initialized! Connecting you...");
     } catch (err) {
       console.error(err);
-      setError("Guest access failed.");
+      setError(err.message || "Failed to initialize guest session.");
     } finally {
       setLoading(false);
     }
   };
-
 
   return (
     <div className="relative flex items-center justify-center min-h-screen w-full bg-black text-white px-4 select-none">
@@ -127,12 +132,39 @@ export default function Auth() {
               </div>
             )}
 
-             <div className="flex flex-col gap-2 mt-2">
+            {!isFirebase ? (
+              <form onSubmit={handleGuestSignIn} className="space-y-4">
+                <div>
+                  <label htmlFor="guest-name" className="text-[10px] font-bold text-zinc-550 uppercase tracking-widest block mb-1.5">
+                    Guest Name
+                  </label>
+                  <input
+                    id="guest-name"
+                    type="text"
+                    value={guestName}
+                    onChange={(e) => setGuestName(e.target.value)}
+                    placeholder="Enter your name"
+                    className="w-full bg-zinc-950 border border-zinc-850 rounded-md px-3 py-2 text-xs text-zinc-200 outline-none focus:border-white transition-colors placeholder:text-zinc-700"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full border border-zinc-850 bg-black/50 text-zinc-300 hover:bg-white hover:text-black font-semibold py-2.5 rounded-md transition-all flex items-center justify-center gap-2.5 cursor-pointer outline-none active:scale-[0.99] text-xs backdrop-blur-sm"
+                >
+                  {loading ? (
+                    <span className="w-4 h-4 border-2 border-zinc-400/30 border-t-zinc-400 rounded-full animate-spin"></span>
+                  ) : (
+                    "Enter Simulator as Guest"
+                  )}
+                </Button>
+              </form>
+            ) : (
               <Button
                 type="button"
                 onClick={handleGoogleSignIn}
-                disabled={loading || !isFirebase}
-                className={`w-full border border-zinc-850 bg-black/50 text-zinc-300 hover:bg-white hover:text-black font-semibold py-2.5 rounded-md transition-all flex items-center justify-center gap-2.5 cursor-pointer outline-none active:scale-[0.99] text-xs backdrop-blur-sm ${!isFirebase ? 'opacity-50 cursor-not-allowed' : ''}`}
+                disabled={loading}
+                className="w-full border border-zinc-850 bg-black/50 text-zinc-300 hover:bg-white hover:text-black font-semibold py-2.5 rounded-md transition-all flex items-center justify-center gap-2.5 cursor-pointer outline-none active:scale-[0.99] text-xs mt-2 backdrop-blur-sm"
               >
                 {loading ? (
                   <span className="w-4 h-4 border-2 border-zinc-400/30 border-t-zinc-400 rounded-full animate-spin"></span>
@@ -148,16 +180,7 @@ export default function Auth() {
                   </>
                 )}
               </Button>
-
-              <Button
-                type="button"
-                onClick={handleGuestSignIn}
-                disabled={loading}
-                className="w-full border border-cyan-800 bg-cyan-950/20 text-cyan-400 hover:bg-cyan-400 hover:text-black font-semibold py-2.5 rounded-md transition-all flex items-center justify-center gap-2.5 cursor-pointer outline-none active:scale-[0.99] text-xs backdrop-blur-sm"
-              >
-                Enter as Guest (Harsh Patel)
-              </Button>
-            </div>
+            )}
           </CardContent>
           <CardFooter className="relative z-10 flex flex-col border-t border-zinc-900 pt-4 pb-4 bg-black/40 backdrop-blur-[2px]">
             <span className="text-[9px] text-zinc-600 uppercase tracking-widest text-center font-bold">

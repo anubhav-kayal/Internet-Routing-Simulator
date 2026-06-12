@@ -35,6 +35,15 @@ export function AuthProvider({ children }) {
       });
       return unsubscribe;
     } else {
+      // Local mode: retrieve saved guest user session
+      const savedGuest = localStorage.getItem("guestUser");
+      if (savedGuest) {
+        try {
+          setCurrentUser(JSON.parse(savedGuest));
+        } catch (e) {
+          localStorage.removeItem("guestUser");
+        }
+      }
       setLoading(false);
     }
   }, []);
@@ -59,7 +68,9 @@ export function AuthProvider({ children }) {
     if (isFirebaseConfigured && auth) {
       return signOut(auth);
     } else {
-      return Promise.reject(new Error("Authentication failed: Firebase is not configured."));
+      setCurrentUser(null);
+      localStorage.removeItem("guestUser");
+      return Promise.resolve();
     }
   };
 
@@ -72,13 +83,15 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const loginAsGuest = () => {
-    setCurrentUser({
-      uid: "guest",
-      email: "harsh.patel@ieee.org",
-      displayName: "Harsh Patel"
-    });
-    return Promise.resolve();
+  const loginAsGuest = (name, email = "guest@offline.local") => {
+    const guestUser = {
+      uid: `guest-${Date.now()}`,
+      displayName: name || "Guest User",
+      email: email
+    };
+    setCurrentUser(guestUser);
+    localStorage.setItem("guestUser", JSON.stringify(guestUser));
+    return Promise.resolve(guestUser);
   };
 
   const value = {
@@ -87,8 +100,8 @@ export function AuthProvider({ children }) {
     signup,
     login,
     loginWithGoogle,
-    logout,
     loginAsGuest,
+    logout,
     loading
   };
 
@@ -98,4 +111,3 @@ export function AuthProvider({ children }) {
     </AuthContext.Provider>
   );
 }
-
