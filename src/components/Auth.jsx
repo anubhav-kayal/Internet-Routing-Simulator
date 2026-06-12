@@ -7,10 +7,11 @@ import { Shield, Network } from "lucide-react";
 import bwNetworkGraphic from "./bw_network_graphic.png";
 
 export default function Auth() {
-  const { loginWithGoogle, isFirebase } = useAuth();
+  const { loginWithGoogle, loginAsGuest, isFirebase } = useAuth();
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [guestName, setGuestName] = useState("");
 
   const handleGoogleSignIn = async () => {
     setError("");
@@ -22,6 +23,26 @@ export default function Auth() {
     } catch (err) {
       console.error(err);
       setError(err.message || "Google authentication failed. Please retry.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGuestSignIn = async (e) => {
+    e.preventDefault();
+    if (!guestName.trim()) {
+      setError("Please enter a name to continue.");
+      return;
+    }
+    setError("");
+    setSuccess("");
+    setLoading(true);
+    try {
+      await loginAsGuest(guestName.trim());
+      setSuccess("Guest session initialized! Connecting you...");
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Failed to initialize guest session.");
     } finally {
       setLoading(false);
     }
@@ -111,26 +132,55 @@ export default function Auth() {
               </div>
             )}
 
-            <Button
-              type="button"
-              onClick={handleGoogleSignIn}
-              disabled={loading}
-              className="w-full border border-zinc-850 bg-black/50 text-zinc-300 hover:bg-white hover:text-black font-semibold py-2.5 rounded-md transition-all flex items-center justify-center gap-2.5 cursor-pointer outline-none active:scale-[0.99] text-xs mt-2 backdrop-blur-sm"
-            >
-              {loading ? (
-                <span className="w-4 h-4 border-2 border-zinc-400/30 border-t-zinc-400 rounded-full animate-spin"></span>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" viewBox="0 0 24 24">
-                    <path
-                      fill="currentColor"
-                      d="M12.24 10.285V14.4h6.887c-.275 1.565-1.88 4.604-6.887 4.604-4.33 0-7.859-3.579-7.859-8s3.529-8 7.859-8c2.46 0 4.105 1.025 5.047 1.926l3.227-3.104C18.232 1.814 15.485 1 12.24 1 6.033 1 1 6.033 1 12.24s5.033 11.24 11.24 11.24c6.478 0 10.793-4.537 10.793-10.976 0-.743-.08-1.309-.176-1.714H12.24z"
-                    />
-                  </svg>
-                  Continue with Google
-                </>
-              )}
-            </Button>
+            {!isFirebase ? (
+              <form onSubmit={handleGuestSignIn} className="space-y-4">
+                <div>
+                  <label htmlFor="guest-name" className="text-[10px] font-bold text-zinc-550 uppercase tracking-widest block mb-1.5">
+                    Guest Name
+                  </label>
+                  <input
+                    id="guest-name"
+                    type="text"
+                    value={guestName}
+                    onChange={(e) => setGuestName(e.target.value)}
+                    placeholder="Enter your name"
+                    className="w-full bg-zinc-950 border border-zinc-850 rounded-md px-3 py-2 text-xs text-zinc-200 outline-none focus:border-white transition-colors placeholder:text-zinc-700"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full border border-zinc-850 bg-black/50 text-zinc-300 hover:bg-white hover:text-black font-semibold py-2.5 rounded-md transition-all flex items-center justify-center gap-2.5 cursor-pointer outline-none active:scale-[0.99] text-xs backdrop-blur-sm"
+                >
+                  {loading ? (
+                    <span className="w-4 h-4 border-2 border-zinc-400/30 border-t-zinc-400 rounded-full animate-spin"></span>
+                  ) : (
+                    "Enter Simulator as Guest"
+                  )}
+                </Button>
+              </form>
+            ) : (
+              <Button
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+                className="w-full border border-zinc-850 bg-black/50 text-zinc-300 hover:bg-white hover:text-black font-semibold py-2.5 rounded-md transition-all flex items-center justify-center gap-2.5 cursor-pointer outline-none active:scale-[0.99] text-xs mt-2 backdrop-blur-sm"
+              >
+                {loading ? (
+                  <span className="w-4 h-4 border-2 border-zinc-400/30 border-t-zinc-400 rounded-full animate-spin"></span>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <path
+                        fill="currentColor"
+                        d="M12.24 10.285V14.4h6.887c-.275 1.565-1.88 4.604-6.887 4.604-4.33 0-7.859-3.579-7.859-8s3.529-8 7.859-8c2.46 0 4.105 1.025 5.047 1.926l3.227-3.104C18.232 1.814 15.485 1 12.24 1 6.033 1 1 6.033 1 12.24s5.033 11.24 11.24 11.24c6.478 0 10.793-4.537 10.793-10.976 0-.743-.08-1.309-.176-1.714H12.24z"
+                      />
+                    </svg>
+                    Continue with Google
+                  </>
+                )}
+              </Button>
+            )}
           </CardContent>
           <CardFooter className="relative z-10 flex flex-col border-t border-zinc-900 pt-4 pb-4 bg-black/40 backdrop-blur-[2px]">
             <span className="text-[9px] text-zinc-600 uppercase tracking-widest text-center font-bold">
