@@ -17,8 +17,7 @@ export default function SimulationInputs({
   showFinalPath,
   setShowFinalPath,
   setAnimationIndex,
-  setIsPlaying,
-  applyPresetCount
+  setIsPlaying
 }) {
   return (
     <Card className="stark-card border-zinc-850 rounded-xl overflow-hidden bg-black/40 backdrop-blur-sm">
@@ -53,30 +52,6 @@ export default function SimulationInputs({
           </select>
         </div>
 
-        {/* Presets */}
-        <div>
-          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block mb-2">
-            Node Count:
-          </label>
-          <div className="grid grid-cols-5 gap-1.5">
-            {[3, 6, 9, 12, 15].map((cnt) => {
-              const isActive = nodeIds.length === cnt;
-              return (
-                <button
-                  key={`cnt-${cnt}`}
-                  onClick={() => applyPresetCount(cnt)}
-                  className={`py-1 text-xs font-mono font-bold rounded border transition-all cursor-pointer ${
-                    isActive
-                      ? "bg-white text-black border-white shadow-[0_0_10px_rgba(255,255,255,0.15)]"
-                      : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800"
-                  }`}
-                >
-                  {cnt}
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
         {/* Source/Dest dropdowns */}
         <div className="grid grid-cols-2 gap-3">
