@@ -49,6 +49,10 @@ export default function TraceInspector({
                     {selectedAlgo === "dijkstra" && activeStep.type === "relax" && `Relaxing edge ${activeStep.relaxedEdge?.[0]} → ${activeStep.relaxedEdge?.[1]}. Path cost improved.`}
                     {selectedAlgo === "dijkstra" && activeStep.type === "done" && `Algorithm completed. Route computed.`}
                     
+                    {selectedAlgo === "bidirectionalDijkstra" && activeStep.type === "visit" && `Visiting Node ${activeStep.visiting} in the ${activeStep.direction} direction. Settling its distance.`}
+                    {selectedAlgo === "bidirectionalDijkstra" && activeStep.type === "relax" && `Relaxing edge ${activeStep.relaxedEdge?.[0]} → ${activeStep.relaxedEdge?.[1]} in the ${activeStep.direction} direction. Path cost improved.`}
+                    {selectedAlgo === "bidirectionalDijkstra" && activeStep.type === "done" && `Algorithm completed. Meeting point established. Shortest path computed.`}
+                    
                     {selectedAlgo === "bellmanFord" && activeStep.type === "scan" && `Scanning edge ${activeStep.relaxedEdge?.[0]} → ${activeStep.relaxedEdge?.[1]}.`}
                     {selectedAlgo === "bellmanFord" && activeStep.type === "relax" && `Relaxing edge ${activeStep.relaxedEdge?.[0]} → ${activeStep.relaxedEdge?.[1]}. Distance value updated.`}
                     {selectedAlgo === "bellmanFord" && activeStep.type === "round_end" && `Completed full pass #${activeStep.roundNumber} over all edges. (Relaxations: ${activeStep.anyRelaxed ? "Yes" : "No"})`}
@@ -60,6 +64,14 @@ export default function TraceInspector({
                     {selectedAlgo === "distanceVector" && activeStep.type === "update" && `Router ${activeStep.router} improves its routes using advertisements.`}
                     {selectedAlgo === "distanceVector" && activeStep.type === "converge" && `No routes changed in this round. Network has fully converged!`}
                     {selectedAlgo === "distanceVector" && activeStep.type === "count_to_infinity" && `ALERT: Count-to-infinity loop detected! Terminated.`}
+
+                    {selectedAlgo === "pathVector" && activeStep.type === "init" && `Router ${activeStep.router} initializes its routing table from direct links.`}
+                    {selectedAlgo === "pathVector" && activeStep.type === "advertise" && `Router ${activeStep.router} sends path vector advertisement to ${activeStep.neighbour}.`}
+                    {selectedAlgo === "pathVector" && activeStep.type === "receive" && `Router ${activeStep.router} receives path vector advertisement from ${activeStep.neighbour}.`}
+                    {selectedAlgo === "pathVector" && activeStep.type === "reject" && `Router ${activeStep.router} discards advertised routes from ${activeStep.neighbour} that would create a loop.`}
+                    {selectedAlgo === "pathVector" && activeStep.type === "update" && `Router ${activeStep.router} improves its routes using advertisements from ${activeStep.neighbour}.`}
+                    {selectedAlgo === "pathVector" && activeStep.type === "converge" && `No routes changed in this round. Network has converged!`}
+                    {selectedAlgo === "pathVector" && activeStep.type === "no_convergence" && `ALERT: Safety cap reached! Path Vector algorithm failed to converge.`}
                     
                     {selectedAlgo === "linkState" && activeStep.type === "lsa_created" && `Router ${activeStep.node} creates and queues its initial LSA.`}
                     {selectedAlgo === "linkState" && activeStep.type === "lsa_received" && `Router ${activeStep.node} receives LSA from neighbour ${activeStep.neighbour}. (Duplicate: ${activeStep.duplicate ? "Yes" : "No"})`}
@@ -76,8 +88,7 @@ export default function TraceInspector({
 
               {/* DYNAMIC DATA TABLE STATE INSPECTORS */}
               <div className="flex-1 flex flex-col justify-stretch">
-                
-                {/* Dijkstra & Bellman-Ford Table Inspector */}
+                        {/* Dijkstra & Bellman-Ford Table Inspector */}
                 {(selectedAlgo === "dijkstra" || selectedAlgo === "bellmanFord") && (
                   <div className="space-y-1.5 flex-1 flex flex-col">
                     <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">
@@ -129,8 +140,72 @@ export default function TraceInspector({
                   </div>
                 )}
 
-                {/* Distance Vector Matrix Inspector */}
-                {selectedAlgo === "distanceVector" && (
+                {/* Bidirectional Dijkstra Table Inspector */}
+                {selectedAlgo === "bidirectionalDijkstra" && (
+                  <div className="space-y-1.5 flex-1 flex flex-col">
+                    <div className="text-[10px] text-zinc-550 font-bold uppercase tracking-wider block">
+                      State Tables (Forward & Backward):
+                    </div>
+                    <div className="flex-1 bg-zinc-950 border border-zinc-850 rounded-lg overflow-y-auto max-h-[220px] font-mono text-[11px] scrollbar-thin">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-zinc-900 bg-zinc-900/50 text-[9px] text-zinc-400 uppercase tracking-wider font-bold">
+                            <th className="py-2 px-2">Node</th>
+                            <th className="py-2 px-2 text-right">Cost F</th>
+                            <th className="py-2 px-2 text-right">Prev F</th>
+                            <th className="py-2 px-2 text-right">Cost B</th>
+                            <th className="py-2 px-2 text-right">Prev B</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {nodeIds.map((nodeId) => {
+                            const costF = activeStep.distF?.[nodeId];
+                            const prevF = activeStep.prevF?.[nodeId];
+                            const costB = activeStep.distB?.[nodeId];
+                            const prevB = activeStep.prevB?.[nodeId];
+                            
+                            const isVisitedF = activeStep.visitedF?.includes(nodeId);
+                            const isVisitedB = activeStep.visitedB?.includes(nodeId);
+                            const isVisiting = activeStep.visiting === nodeId;
+                            
+                            let rowClass = "border-b border-zinc-900/40 text-zinc-400";
+                            if (isVisiting) {
+                              rowClass = "border-b border-zinc-900/40 bg-zinc-800/40 text-white font-bold";
+                            } else if (isVisitedF || isVisitedB) {
+                              rowClass = "border-b border-zinc-900/40 text-zinc-200";
+                            }
+
+                            return (
+                              <tr key={`state-bidir-${nodeId}`} className={rowClass}>
+                                <td className="py-1.5 px-2 flex items-center gap-1.5">
+                                  <span className={`w-1.5 h-1.5 rounded-full ${
+                                    isVisiting ? "bg-white animate-pulse" : (isVisitedF && isVisitedB) ? "bg-purple-500" : isVisitedF ? "bg-blue-400" : isVisitedB ? "bg-orange-400" : "bg-zinc-700"
+                                  }`}></span>
+                                  {nodeId}
+                                </td>
+                                <td className="py-1.5 px-2 text-right">
+                                  {costF === Infinity || costF === undefined ? "∞" : costF}
+                                </td>
+                                <td className="py-1.5 px-2 text-right">
+                                  {prevF === null || prevF === undefined ? "-" : prevF}
+                                </td>
+                                <td className="py-1.5 px-2 text-right">
+                                  {costB === Infinity || costB === undefined ? "∞" : costB}
+                                </td>
+                                <td className="py-1.5 px-2 text-right">
+                                  {prevB === null || prevB === undefined ? "-" : prevB}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Distance Vector & Path Vector Matrix Inspector */}
+                {(selectedAlgo === "distanceVector" || selectedAlgo === "pathVector") && (
                   <div className="space-y-3 flex-1 flex flex-col">
                     
                     {/* Selector for Routing Table view */}
@@ -159,7 +234,9 @@ export default function TraceInspector({
                             <tr className="border-b border-zinc-900 bg-zinc-900/50 text-[9px] text-zinc-400 uppercase tracking-wider font-bold">
                               <th className="py-1.5 px-3">Dest</th>
                               <th className="py-1.5 px-3 text-right">Cost</th>
-                              <th className="py-1.5 px-3 text-right">Next</th>
+                              <th className="py-1.5 px-3 text-right">
+                                {selectedAlgo === "pathVector" ? "Path" : "Next"}
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -167,11 +244,18 @@ export default function TraceInspector({
                               const entry = activeStep.routingTables[inspectorRouter][destId];
                               const cost = entry?.cost;
                               const nextHop = entry?.next;
+                              const path = entry?.path;
                               return (
                                 <tr key={`dv-table-${destId}`} className="border-b border-zinc-900/40 text-zinc-400">
                                   <td className="py-1 px-3">{destId}</td>
                                   <td className="py-1 px-3 text-right">{cost === Infinity ? "∞" : cost}</td>
-                                  <td className="py-1 px-3 text-right">{nextHop === null ? "-" : nextHop}</td>
+                                  <td className="py-1 px-3 text-right">
+                                    {selectedAlgo === "pathVector" ? (
+                                      path && path.length > 0 ? path.join("→") : "-"
+                                    ) : (
+                                      nextHop === null ? "-" : nextHop
+                                    )}
+                                  </td>
                                 </tr>
                               );
                             })}
@@ -187,10 +271,52 @@ export default function TraceInspector({
                           Packet advertisement payload:
                         </div>
                         <div className="font-mono text-[10px] text-zinc-300 mt-1 flex flex-wrap gap-x-2 gap-y-1">
-                          {Object.entries(activeStep.packet).map(([dest, cost]) => (
-                            <span key={`dv-packet-${dest}`} className="px-1.5 py-0.5 bg-black/40 border border-zinc-800 rounded">
-                              {dest}: {cost === Infinity ? "∞" : cost}
-                            </span>
+                          {Object.entries(activeStep.packet).map(([dest, val]) => {
+                            const displayVal = selectedAlgo === "pathVector"
+                              ? `${val?.cost ?? Infinity} (${val?.path ? val.path.join("→") : ""})`
+                              : (val === Infinity ? "∞" : val);
+                            return (
+                              <span key={`dv-packet-${dest}`} className="px-1.5 py-0.5 bg-black/40 border border-zinc-800 rounded">
+                                {dest}: {displayVal}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Updated Routes details */}
+                    {activeStep.updatedRoutes && activeStep.updatedRoutes.length > 0 && (
+                      <div className="bg-emerald-950/20 border border-emerald-900/45 rounded-lg p-2.5">
+                        <div className="text-[9px] text-emerald-400 font-bold uppercase tracking-wider">
+                          Updated routes:
+                        </div>
+                        <div className="font-mono text-[10px] text-zinc-300 mt-1 space-y-0.5">
+                          {activeStep.updatedRoutes.map((route, idx) => {
+                            const pathStr = route.newPath ? ` via ${route.newPath.join("→")}` : ` (next: ${route.nextHop})`;
+                            const oldCostStr = route.oldCost === Infinity ? "∞" : route.oldCost;
+                            const newCostStr = route.newCost === Infinity ? "∞" : route.newCost;
+                            return (
+                              <div key={`ur-${idx}`}>
+                                {route.destination}: cost {oldCostStr} → {newCostStr}{pathStr}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Rejected Paths details */}
+                    {activeStep.rejectedPaths && activeStep.rejectedPaths.length > 0 && (
+                      <div className="bg-rose-950/20 border border-rose-900/45 rounded-lg p-2.5">
+                        <div className="text-[9px] text-rose-455 font-bold uppercase tracking-wider">
+                          Rejected paths (loop detected):
+                        </div>
+                        <div className="font-mono text-[10px] text-zinc-300 mt-1 space-y-0.5">
+                          {activeStep.rejectedPaths.map((route, idx) => (
+                            <div key={`rp-${idx}`} className="text-rose-300">
+                              {route.destination}: path [{route.path.join("→")}] rejected
+                            </div>
                           ))}
                         </div>
                       </div>

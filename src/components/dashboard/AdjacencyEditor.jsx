@@ -35,7 +35,7 @@ export default function AdjacencyEditor({ graphText, setGraphText, onRearrange }
         )}
       </CardHeader>
       <CardContent className="p-0 flex-1 flex items-stretch">
-        <div className="relative flex-1 flex overflow-hidden min-h-[220px]">
+        <div className="relative flex-1 flex overflow-hidden h-[600px]">
           {/* Lines Column */}
           <div
             ref={lineNumbersRef}
