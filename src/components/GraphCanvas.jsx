@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
 
 export default function GraphCanvas({
   nodes = [],
@@ -15,6 +16,8 @@ export default function GraphCanvas({
   const svgRef = useRef(null);
   const [draggedNodeId, setDraggedNodeId] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [zoomScale, setZoomScale] = useState(1);
+  const hasDraggedRef = useRef(false);
 
   // Panning State
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
@@ -32,9 +35,10 @@ export default function GraphCanvas({
     const clientX = e.clientX;
     const clientY = e.clientY;
 
-    const mouseX = clientX - rect.left - panOffset.x;
-    const mouseY = clientY - rect.top - panOffset.y;
+    const mouseX = (clientX - rect.left - panOffset.x) / zoomScale;
+    const mouseY = (clientY - rect.top - panOffset.y) / zoomScale;
 
+    hasDraggedRef.current = false;
     setDraggedNodeId(nodeId);
     setDragOffset({
       x: mouseX - node.x,
@@ -57,6 +61,7 @@ export default function GraphCanvas({
   const handleDoubleClick = (e) => {
     if (e.target === svgRef.current) {
       setPanOffset({ x: 0, y: 0 });
+      setZoomScale(1);
     }
   };
 
@@ -68,7 +73,8 @@ export default function GraphCanvas({
     dragOffset,
     isPanning,
     panOffset,
-    panStart
+    panStart,
+    zoomScale
   };
 
   const handleMouseMove = (e) => {
@@ -78,11 +84,20 @@ export default function GraphCanvas({
       const clientX = e.clientX;
       const clientY = e.clientY;
 
-      const mouseX = clientX - rect.left - state.panOffset.x;
-      const mouseY = clientY - rect.top - state.panOffset.y;
+      const mouseX = (clientX - rect.left - state.panOffset.x) / state.zoomScale;
+      const mouseY = (clientY - rect.top - state.panOffset.y) / state.zoomScale;
 
       const newX = mouseX - state.dragOffset.x;
       const newY = mouseY - state.dragOffset.y;
+
+      const node = state.nodes.find(n => n.id === state.draggedNodeId);
+      if (node) {
+        const dx = newX - node.x;
+        const dy = newY - node.y;
+        if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+          hasDraggedRef.current = true;
+        }
+      }
 
       onNodeDrag(state.draggedNodeId, newX, newY);
     } else if (state.isPanning) {
@@ -145,6 +160,14 @@ export default function GraphCanvas({
         style={{ minHeight: "380px" }}
         onMouseDown={handleCanvasMouseDown}
         onDoubleClick={handleDoubleClick}
+        onWheel={(e) => {
+          const zoomFactor = 1.08;
+          if (e.deltaY < 0) {
+            setZoomScale(prev => Math.min(3, prev * zoomFactor));
+          } else {
+            setZoomScale(prev => Math.max(0.4, prev / zoomFactor));
+          }
+        }}
       >
         <defs>
           {/* Arrow markers for directed edges */}
@@ -195,7 +218,7 @@ export default function GraphCanvas({
         </defs>
 
         {/* Main Transformed Canvas Container */}
-        <g transform={`translate(${panOffset.x}, ${panOffset.y})`}>
+        <g transform={`translate(${panOffset.x}, ${panOffset.y}) scale(${zoomScale})`}>
           {/* Draw Edges */}
           <g>
             {edges.map((edge, i) => {
@@ -316,7 +339,11 @@ export default function GraphCanvas({
                   key={`node-${node.id}`}
                   transform={`translate(${node.x}, ${node.y})`}
                   className="cursor-pointer select-none group"
-                  onClick={() => onNodeClick(node.id)}
+                  onClick={() => {
+                    if (!hasDraggedRef.current) {
+                      onNodeClick(node.id);
+                    }
+                  }}
                   onMouseDown={(e) => handleMouseDown(e, node.id)}
                 >
                   {/* Outer pulsating indicator for visiting node */}
@@ -366,6 +393,34 @@ export default function GraphCanvas({
       
       <div className="absolute bottom-3 left-3 px-3 py-1 bg-zinc-950/80 border border-zinc-850 rounded-md text-[9px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 backdrop-blur-sm pointer-events-none">
         Drag nodes to structure • Drag background to pan • Double-click to reset view
+      </div>
+
+      {/* Floating Zoom Controls */}
+      <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-zinc-950/85 border border-zinc-850 rounded-md p-1.5 backdrop-blur-sm z-20">
+        <button
+          onClick={() => setZoomScale(prev => Math.min(3, prev * 1.15))}
+          className="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white transition-all cursor-pointer"
+          title="Zoom In"
+        >
+          <ZoomIn className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => setZoomScale(prev => Math.max(0.4, prev / 1.15))}
+          className="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white transition-all cursor-pointer"
+          title="Zoom Out"
+        >
+          <ZoomOut className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => {
+            setZoomScale(1);
+            setPanOffset({ x: 0, y: 0 });
+          }}
+          className="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white transition-all cursor-pointer"
+          title="Reset View"
+        >
+          <Maximize2 className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );

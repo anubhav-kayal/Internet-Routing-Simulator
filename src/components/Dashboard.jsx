@@ -64,13 +64,14 @@ export default function Dashboard() {
   const [nodePositions, setNodePositions] = useState(DEFAULT_NODE_POSITIONS);
 
   // Algorithm States
-  const [selectedAlgo, setSelectedAlgo] = useState("dijkstra"); // dijkstra, bellmanFord, distanceVector, linkState
+  const [selectedAlgo, setSelectedAlgo] = useState("dijkstra"); // dijkstra, bidirectionalDijkstra, bellmanFord, distanceVector, pathVector, linkState
   const [sourceNode, setSourceNode] = useState("1");
   const [destNode, setDestNode] = useState("2");
   const [maxRounds, setMaxRounds] = useState(50);
   const [poisonReverse, setPoisonReverse] = useState(false);
   const [algoResult, setAlgoResult] = useState(null);
   const [algoError, setAlgoError] = useState(null);
+  const [showFinalPath, setShowFinalPath] = useState(true);
 
   // Animation States
   const [animationIndex, setAnimationIndex] = useState(0);
@@ -96,7 +97,12 @@ export default function Dashboard() {
       const result = parseGraphText(graphText, directed);
       setParsedData(result);
 
-      const engine = new SimulationEngine(520, 380);
+      // Determine if we need to run physics layout iterations.
+      // We run layout if there are no existing positions, or if some nodes are missing positions.
+      const hasPositionsForAll = result.nodeIds.every(id => nodePositionsRef.current && nodePositionsRef.current[id]);
+      const iterations = hasPositionsForAll ? 0 : 250;
+
+      const engine = new SimulationEngine(750, 450);
       const simResult = engine.runSimulation(
         result.graph,
         selectedAlgo,
@@ -106,7 +112,7 @@ export default function Dashboard() {
           seedPositions: nodePositionsRef.current,
           poisonReverse,
           maxRounds,
-          iterations: 120
+          iterations
         }
       );
 
@@ -180,6 +186,7 @@ export default function Dashboard() {
       setAnimationIndex((prev) => {
         if (prev >= stepsCount - 1) {
           setIsPlaying(false);
+          setTimeout(() => setShowFinalPath(true), 0);
           return prev;
         }
         return prev + 1;
@@ -194,7 +201,7 @@ export default function Dashboard() {
   let activeVisualPath = [];
 
   if (activeStep) {
-    if (selectedAlgo === "dijkstra" || selectedAlgo === "bellmanFord") {
+    if (selectedAlgo === "dijkstra" || selectedAlgo === "bellmanFord" || selectedAlgo === "bidirectionalDijkstra") {
       activeCanvasNode = activeStep.visiting;
       activeCanvasEdge = activeStep.relaxedEdge;
       
@@ -202,7 +209,7 @@ export default function Dashboard() {
       if (activeStep.type === "done" && activeStep.finalPath) {
         activeVisualPath = activeStep.finalPath;
       }
-    } else if (selectedAlgo === "distanceVector") {
+    } else if (selectedAlgo === "distanceVector" || selectedAlgo === "pathVector") {
       activeCanvasNode = activeStep.router;
       if (activeStep.router && activeStep.neighbour) {
         activeCanvasEdge = [activeStep.router, activeStep.neighbour];
@@ -223,7 +230,7 @@ export default function Dashboard() {
   let finalReachable = false;
 
   if (algoResult) {
-    if (selectedAlgo === "dijkstra" || selectedAlgo === "bellmanFord") {
+    if (selectedAlgo === "dijkstra" || selectedAlgo === "bellmanFord" || selectedAlgo === "bidirectionalDijkstra") {
       finalPath = algoResult.path;
       finalCost = algoResult.cost;
       finalReachable = algoResult.reachable;
@@ -250,6 +257,14 @@ export default function Dashboard() {
           if (finalReachable) finalPath = path;
         }
       }
+    } else if (selectedAlgo === "pathVector") {
+      const routingTables = algoResult.routingTables;
+      if (routingTables && routingTables[sourceNode] && routingTables[sourceNode][destNode]) {
+        const entry = routingTables[sourceNode][destNode];
+        finalCost = entry.cost;
+        finalPath = entry.path || [];
+        finalReachable = finalCost !== Infinity;
+      }
     } else if (selectedAlgo === "linkState") {
       const routingTables = algoResult.routingTables;
       if (routingTables) {
@@ -273,43 +288,7 @@ export default function Dashboard() {
     y: nodePositions[id]?.y ?? 180
   }));
 
-  // Presets
-  const applyPresetCount = (count) => {
-    const nodeNames = Array.from({ length: count }, (_, i) => String(i));
-    const connections = [];
 
-    // Create a connected tree
-    for (let i = 1; i < count; i++) {
-      const parent = Math.floor(Math.random() * i);
-      const weight = Math.floor(Math.random() * 5) + 1;
-      connections.push(`${parent} ${i} ${weight}`);
-    }
-
-    // Add random loop edges
-    const loopCount = Math.floor(count * 0.4);
-    for (let i = 0; i < loopCount; i++) {
-      const u = Math.floor(Math.random() * count);
-      const v = Math.floor(Math.random() * count);
-      if (u !== v) {
-        const sortedEdge = u < v ? `${u} ${v}` : `${v} ${u}`;
-        const weight = Math.floor(Math.random() * 5) + 1;
-        const exists = connections.some(c => c.startsWith(sortedEdge));
-        if (!exists) {
-          connections.push(`${sortedEdge} ${weight}`);
-        }
-      }
-    }
-
-    const text = `# Preset: ${count} Nodes\n# Nodes\n${nodeNames.join("\n")}\n\n# Edges (u v w)\n${connections.join("\n")}`;
-    
-    // Clear previous node positions so layout engine recalculates it fresh!
-    nodePositionsRef.current = {};
-    setNodePositions({});
-    setGraphText(text);
-    setSourceNode("0");
-    setDestNode(String(count - 1));
-    setLayoutTrigger((prev) => prev + 1);
-  };
 
   return (
     <div className="flex flex-col min-h-screen bg-[#07080a] text-zinc-200 font-sans">
@@ -341,9 +320,10 @@ export default function Dashboard() {
             setDirected={setDirected}
             poisonReverse={poisonReverse}
             setPoisonReverse={setPoisonReverse}
+            showFinalPath={showFinalPath}
+            setShowFinalPath={setShowFinalPath}
             setAnimationIndex={setAnimationIndex}
             setIsPlaying={setIsPlaying}
-            applyPresetCount={applyPresetCount}
           />
 
           {/* ADJACENCY EDITOR CARD */}
@@ -377,7 +357,7 @@ export default function Dashboard() {
                   onNodeDrag={handleNodeDrag}
                   sourceNode={sourceNode}
                   destNode={destNode}
-                  path={activeVisualPath.length > 0 ? activeVisualPath : finalPath}
+                  path={showFinalPath ? (activeVisualPath.length > 0 ? activeVisualPath : finalPath) : []}
                   activeNode={activeCanvasNode}
                   activeEdge={activeCanvasEdge}
                   directed={directed}
