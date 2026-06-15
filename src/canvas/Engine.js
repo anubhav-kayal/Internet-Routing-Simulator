@@ -2,23 +2,22 @@ import { dijkstra } from "../algorithms/dijkstra.js";
 import { bellmanFord } from "../algorithms/bellman_ford.js";
 import { distanceVector } from "../algorithms/distance_vector_routing.js";
 import { linkState } from "../algorithms/linkstate.js";
+import { bidirectionalDijkstra } from "../algorithms/bidirectional-dijkstra.js";
+import { pathVector } from "../algorithms/pathvector.js";
 
 export class SimulationEngine {
     constructor(canvasWidth = 800, canvasHeight = 600) {
-        // Set boundary dimensions
         this.width = canvasWidth;
         this.height = canvasHeight;
         this.nodes = {};
         this.edges = [];
     }
 
-    // Parse adjacency list
     initializeGraph(adjacencyList) {
         this.nodes = {};
         this.edges = [];
         const routerIds = Object.keys(adjacencyList);
 
-        // Assign random initial coordinates
         routerIds.forEach(id => {
             this.nodes[id] = {
                 x: Math.random() * this.width,
@@ -28,7 +27,6 @@ export class SimulationEngine {
             };
         });
 
-        // Extract unique graph edges
         const seenEdges = new Set();
         routerIds.forEach(u => {
             adjacencyList[u].forEach(edge => {
@@ -42,15 +40,13 @@ export class SimulationEngine {
         });
     }
 
-    // Run physics simulation loop
     calculateLayout(iterations = 300) {
-        const repulsion = 5000;
-        const gravity = 0.05;
+        const repulsionForce = 120000;
+        const gravity = 0.01;
 
         for (let i = 0; i < iterations; i++) {
             const nodeIds = Object.keys(this.nodes);
 
-            // Apply node repulsion force
             for (let a = 0; a < nodeIds.length; a++) {
                 for (let b = a + 1; b < nodeIds.length; b++) {
                     const nodeA = this.nodes[nodeIds[a]];
@@ -58,9 +54,15 @@ export class SimulationEngine {
 
                     let dx = nodeA.x - nodeB.x;
                     let dy = nodeA.y - nodeB.y;
-                    let distance = Math.sqrt(dx * dx + dy * dy) || 1;
+                    let distance = Math.sqrt(dx * dx + dy * dy);
 
-                    const force = repulsion / distance;
+                    if (distance < 5) {
+                        dx = (Math.random() - 0.5) * 6 || 3;
+                        dy = (Math.random() - 0.5) * 6 || 3;
+                        distance = Math.sqrt(dx * dx + dy * dy);
+                    }
+
+                    const force = Math.min(100, repulsionForce / (distance * distance));
                     const fx = (dx / distance) * force;
                     const fy = (dy / distance) * force;
 
@@ -71,18 +73,24 @@ export class SimulationEngine {
                 }
             }
 
-            // Apply edge spring attraction
             this.edges.forEach(edge => {
                 const nodeA = this.nodes[edge.source];
                 const nodeB = this.nodes[edge.target];
+                if (!nodeA || !nodeB) return;
 
-                const idealLength = edge.weight * 20;
+                const idealLength = edge.weight * 35 + 85;
 
                 let dx = nodeA.x - nodeB.x;
                 let dy = nodeA.y - nodeB.y;
-                let distance = Math.sqrt(dx * dx + dy * dy) || 1;
+                let distance = Math.sqrt(dx * dx + dy * dy);
 
-                const force = (distance - idealLength) * 0.05;
+                if (distance < 5) {
+                    dx = (Math.random() - 0.5) * 6 || 3;
+                    dy = (Math.random() - 0.5) * 6 || 3;
+                    distance = Math.sqrt(dx * dx + dy * dy);
+                }
+
+                const force = (distance - idealLength) * 0.06;
                 const fx = (dx / distance) * force;
                 const fy = (dy / distance) * force;
 
@@ -95,12 +103,18 @@ export class SimulationEngine {
             const centerX = this.width / 2;
             const centerY = this.height / 2;
 
-            // Apply gravity, movement, and friction
             nodeIds.forEach(id => {
                 const node = this.nodes[id];
 
                 node.vx += (centerX - node.x) * gravity;
                 node.vy += (centerY - node.y) * gravity;
+
+                const maxSpeed = 10;
+                const speed = Math.sqrt(node.vx * node.vx + node.vy * node.vy);
+                if (speed > maxSpeed) {
+                    node.vx = (node.vx / speed) * maxSpeed;
+                    node.vy = (node.vy / speed) * maxSpeed;
+                }
 
                 node.x += node.vx;
                 node.y += node.vy;
@@ -113,7 +127,6 @@ export class SimulationEngine {
             });
         }
 
-        // Return final coordinate map
         const finalCoordinates = {};
         Object.keys(this.nodes).forEach(id => {
             finalCoordinates[id] = {
@@ -125,11 +138,9 @@ export class SimulationEngine {
         return finalCoordinates;
     }
 
-    // Execute unified simulation
     runSimulation(graph, algorithm, source, target, options = {}) {
         this.initializeGraph(graph);
         
-        // Use provided seed positions
         if (options.seedPositions) {
             Object.keys(this.nodes).forEach(id => {
                 if (options.seedPositions[id]) {
@@ -144,24 +155,37 @@ export class SimulationEngine {
         let algoResult = null;
         let error = null;
 
-        // Run selected routing algorithm
         try {
             const nodes = Object.keys(graph);
             if (nodes.length > 0) {
                 if (algorithm === "dijkstra") {
+                    // Dijkstra
                     if (nodes.includes(source) && nodes.includes(target)) {
                         algoResult = dijkstra(graph, source, target);
                     }
+                } else if (algorithm === "bidirectionalDijkstra") {
+                    // Bidirectional Dijkstra
+                    if (nodes.includes(source) && nodes.includes(target)) {
+                        algoResult = bidirectionalDijkstra(graph, source, target);
+                    }
                 } else if (algorithm === "bellmanFord") {
+                    // Bellman-Ford
                     if (nodes.includes(source) && nodes.includes(target)) {
                         algoResult = bellmanFord(graph, source, target);
                     }
                 } else if (algorithm === "distanceVector") {
+                    // Distance Vector
                     algoResult = distanceVector(graph, {
                         maxRounds: options.maxRounds || 50,
                         poisonReverse: options.poisonReverse || false
                     });
+                } else if (algorithm === "pathVector") {
+                    // Path Vector
+                    algoResult = pathVector(graph, {
+                        maxRounds: options.maxRounds || 50
+                    });
                 } else if (algorithm === "linkState") {
+                    // Link State
                     algoResult = linkState(graph);
                 }
             }
